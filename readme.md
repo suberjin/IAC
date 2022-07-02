@@ -1,4 +1,4 @@
-To make an .env file for correct work:
+In ansible folder make an .env file for correct work:
 
 FLASK_APP="api.py"
 
