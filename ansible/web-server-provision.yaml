@@ -1,0 +1,129 @@
+- hosts: web-server
+  become: true
+#  gather_facts: no
+  
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+
+    - name: install dependencies
+      apt:
+        pkg:
+          - ca-certificates
+          - software-properties-common
+          - apt-transport-https
+          - curl
+          - gnupg
+          - lsb-release
+          - htop
+      
+    - name: Update repo git
+      apt_repository:
+        repo: "ppa:git-core/ppa"
+        state: present
+
+    - name: Install apt key
+      ansible.builtin.apt_key:
+        url: "https://download.docker.com/linux/ubuntu/gpg"
+        state: present
+        keyring: /etc/apt/trusted.gpg.d/docker.gpg
+
+    - name: Install docker repo
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: install docker
+      apt:
+        update_cache: yes
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+
+# install docker-compose 1.26.0 version
+    - name: install docker-compose
+      get_url:
+        url: https://github.com/docker/compose/releases/download/1.26.0/docker-compose-{{ ansible_system }}-{{ ansible_userspace_architecture }}
+        dest: /usr/local/bin/docker-compose
+        mode: 'u+x,g+x'
+
+# create a symbolic link to /usr/bin 
+    - name: Create symlink
+      file: src=/usr/local/bin/docker-compose dest=/usr/bin/docker-compose state=link
+    
+    - name: adding existing user "{{ ansible_user }}" to group docker
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      become: yes
+
+    - name: Install git
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+
+## Generate SSH Key and read content
+- name: generate SSH key
+  hosts: web-server
+  vars:
+    ssh_key_filename: id_rsa_myproject
+  tasks:
+    - name: generate SSH key "{{ssh_key_filename}}"
+      openssh_keypair:
+        path: "~/.ssh/{{ssh_key_filename}}"
+        type: rsa
+        size: 4096
+        state: present
+        force: no
+    - name: "Read a file content"
+      shell: |
+        cat ~/.ssh/id_rsa_myproject.pub 
+      register: file_content
+    - name: "Print the file content to a console"
+      debug:
+        msg: "{{ file_content.stdout }}"
+    - name: A helpful reminder of what to look out for post-update
+      ansible.builtin.pause:
+        prompt:  "Be sure to copy the public key to your git repository settings. Don't continue until this is done."
+
+## If we raise many machines of the same type, it is better to use this. Before that, generate a key and bind it to Github
+## Comment out Generate SSH Key and read content
+#    - name: Write id_rsa file 
+#      copy:
+#        src: ~/.ssh/id_rsa
+#        dest: /home/ubuntu/.ssh/
+
+## git clone from repo
+    - name: Clone a github repository
+      git:
+        repo: https://github.com/chdima1983/flaslapi.git 
+        dest: ~/flaskapi
+        clone: yes
+        update: yes
+
+## Be sure to create an .env file. The content is described in the readme file
+    - name: Write env files
+      copy:
+        src: ./.env
+        dest: ~/flaskapi/
+
+#    - name: Run `docker-compose up`
+#      become: true
+#      community.docker.docker_compose:
+#        state: present
+#        project_src: "/home/ubuntu/flaskapi/"
+
+## run docker-compose with my env
+    - name: Run container
+      become: true
+      shell:
+        chdir: /home/ubuntu/flaskapi/
+        cmd: "docker-compose up -d"
+
