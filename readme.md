@@ -1,5 +1,8 @@
-## description
+# description
 
+This project is just for fun
+
+# Installation
 In ansible folder make an .env file for correct work:
 
 ```
@@ -10,3 +13,7 @@ DB_USERNAME="anyusername"
 DB_PASSWORD="anypassword"
 DB_NAME="anydbname"
 ```
+
+
+string one
+string two
